@@ -1749,12 +1749,12 @@ pmc_handle_client_request(ThreadId tid, UWord *arg, UWord *ret )
         }
 
         case VG_USERREQ__PMC_ADD_TO_TX: {
-            *ret = add_obj_to_tx(VG_(get_running_tid)(), arg[1], arg[2]);
+            *ret = add_obj_to_tx(VG_(get_running_tid)(), arg[1], arg[2], arg[3]);
             break;
         }
 
         case VG_USERREQ__PMC_ADD_TO_TX_N: {
-            *ret = add_obj_to_tx(arg[1], arg[2], arg[3]);
+            *ret = add_obj_to_tx(arg[1], arg[2], arg[3], arg[4]);
             break;
         }
 

@@ -41,8 +41,13 @@ struct tx_info {
     /** Regions of memory tracked by the transaction. */
     OSet *regions;
 
+    /** Regions of memory tracked by the transaction but not drained. */
+    OSet *not_drained_regions;
+
     /** The last added region - cached. */
     struct pmem_st cached_region;
+
+    Bool cached_drain;
 };
 
 /** Thread to transaction descriptor. */
@@ -308,8 +313,11 @@ register_new_tx(UWord tx_id)
         new_tx->context = VG_(record_ExeContext)(thread_id, 0);
         new_tx->regions = VG_(OSetGen_Create)(/*keyOff*/0, cmp_pmem_st,
                                 VG_(malloc), "pmc.trans.cpci.1", VG_(free));
+        new_tx->not_drained_regions = VG_(OSetGen_Create)(/*keyOff*/0, cmp_pmem_st,
+                                VG_(malloc), "pmc.trans.cpci.2", VG_(free));
         new_tx->cached_region.addr = 0;
         new_tx->cached_region.size = 0;
+        new_tx->cached_drain = 1;
         VG_(OSetGen_Insert)(trans.transactions, new_tx);
     }
 
@@ -404,13 +412,13 @@ is_tx_in_thread(UWord tx_id)
  * \param[in,out] tx Transaction whose cache is to be flushed.
  */
 static void
-flush_cache(struct tx_info *tx)
+flush_cache(struct tx_info *tx, OSet *region_set)
 {
     /* cache is empty, do not try to flush it */
     if ((tx->cached_region.addr == 0) && (tx->cached_region.size == 0))
         return;
 
-    add_region(&(tx->cached_region), tx->regions);
+    add_region(&(tx->cached_region), region_set);
     tx->cached_region.addr = 0;
     tx->cached_region.size = 0;
 }
@@ -424,7 +432,7 @@ flush_cache(struct tx_info *tx)
  *            to the given transaction, 0 otherwise.
  */
 UInt
-add_obj_to_tx(UWord tx_id, UWord base, UWord size)
+add_obj_to_tx(UWord tx_id, UWord base, UWord size, Bool drain)
 {
     struct tx_info *tx = VG_(OSetGen_Lookup)(trans.transactions, &tx_id);
     if (tx == NULL) {
@@ -462,25 +470,40 @@ add_obj_to_tx(UWord tx_id, UWord base, UWord size)
             register_cross_event(VG_(OSetGen_Lookup)(tx_iter->regions, &reg),
                                  tx_iter->tx_id, &reg, tx_id);
     }
+   
 
     /* cache not empty, consider options */
     if (LIKELY((tx->cached_region.addr != 0)
             && (tx->cached_region.size != 0))) {
         UWord overlap = check_overlap(&(tx->cached_region), &reg);
-
+        OSet *r = (tx->cached_drain) ? tx->regions : tx->not_drained_regions;
+        // OSet *r = tx->regions;
         if (LIKELY(overlap == 0)) {
             /* no overlap - insert old cached region */
-            flush_cache(tx);
+            flush_cache(tx, r);
         } else if (UNLIKELY(overlap == 2)) {
             /* partial overlap - cut out new cache from regions */
-            flush_cache(tx);
+            flush_cache(tx, r);
             remove_region(&reg, tx->regions);
         }
         /* overlap == 1 - do nothing, new cache includes old cache */
     }
-
     /* update cache */
     tx->cached_region = reg;
+    tx->cached_drain = drain;
+
+    struct pmem_st *reg_iter;
+    if (drain) {
+        while ((reg_iter = VG_(OSetGen_Next)(tx->not_drained_regions)) != NULL) {
+            VG_(OSetGen_Insert)(tx->regions, reg_iter);
+        }
+    }
+    else
+        {
+        add_region(&reg, tx->not_drained_regions);
+        }
+
+
     return 0;
 }
 
@@ -544,6 +567,7 @@ is_store_in_tx(const struct pmem_st *store, UWord tx_id)
 {
     struct tx_info *tx = VG_(OSetGen_Lookup)(trans.transactions, &tx_id);
     if (tx == NULL) {
+        VG_(dmsg)("no matching transaction found\n");
         /* no matching transaction found */
         if (trans.verbose)
             VG_(dmsg)("no matching transaction found\n");
@@ -555,13 +579,17 @@ is_store_in_tx(const struct pmem_st *store, UWord tx_id)
         return True;
 
     /* flush cache because of possible coalescing */
-    flush_cache(tx);
+    flush_cache(tx, tx->regions);
 
     /* return true only if store is fully within one of the regions */
-    if (is_in_mapping_set(store, tx->regions) == 1)
+    if (is_in_mapping_set(store, tx->regions) == 1) {
+
         return True;
-    else
+    }
+    else {
+        VG_(dmsg)("return false\n");
         return False;
+    }
 }
 
 /**
@@ -684,6 +712,7 @@ handle_tx_store(const struct pmem_st *store)
     UWord tx_id;
     VG_(OSetWord_ResetIter)(tinfo->tx_ids);
     while (VG_(OSetWord_Next)(tinfo->tx_ids, &tx_id)) {
+        VG_(dmsg)("weszlo\n");
         if (is_store_in_tx(store, tx_id))
             return;
     }
@@ -696,6 +725,7 @@ handle_tx_store(const struct pmem_st *store)
     }
 
     /* report if not */
+    VG_(dmsg)("store recorded\n");
     record_store(store, tinfo);
 }
 

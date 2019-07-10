@@ -50,9 +50,11 @@ cmp_pmem_st(const void *key, const void *elem)
 UWord
 check_overlap(const struct pmem_st *lhs, const struct pmem_st *rhs)
 {
-    if (cmp_pmem_st(lhs, rhs))
+    if (cmp_pmem_st(lhs, rhs)) {
+        VG_(dmsg)("regions do not overlap\n");
         /* regions do not overlap */
         return 0;
+    }
     else if ((lhs->addr < rhs->addr)
             || (lhs->addr + lhs->size) > (rhs->addr + rhs->size))
         /* partial overlap */
@@ -74,6 +76,7 @@ is_in_mapping_set(const struct pmem_st *region, OSet *region_set)
 {
     if (!VG_(OSetGen_Contains)(region_set, region)) {
         /* not in set */
+        VG_(dmsg)("not in set\n");
         return 0;
     }
 

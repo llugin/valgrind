@@ -67,7 +67,7 @@ void register_new_tx(UWord tx_id);
 UInt remove_tx(UWord tx_id);
 
 /* Add a memory region to a transaction */
-UInt add_obj_to_tx(UWord tx_id, UWord base, UWord size);
+UInt add_obj_to_tx(UWord tx_id, UWord base, UWord size, Bool drain);
 
 /* Remove a registered region from the given transaction */
 UInt remove_obj_from_tx(UWord tx_id, UWord base, UWord size);

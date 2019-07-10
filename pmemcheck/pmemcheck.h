@@ -173,12 +173,25 @@ typedef
 
 /** Add a persistent memory region to the implicit transaction */
 #define VALGRIND_PMC_ADD_TO_TX(_qzz_addr,_qzz_len)                          \
+    VG_(dmsg)("duduup\n"); \
+    VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,                 \
+                            VG_USERREQ__PMC_ADD_TO_TX,                      \
+                            (_qzz_addr), (_qzz_len), 1, 0, 0)
+
+/** Add a persistent memory region to an explicit transaction */
+#define VALGRIND_PMC_ADD_TO_TX_N(_qzz_txn,_qzz_addr,_qzz_len)               \
+    VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,                 \
+                            VG_USERREQ__PMC_ADD_TO_TX_N,                    \
+                            (_qzz_txn), (_qzz_addr), (_qzz_len), 1, 0)
+
+/** Add a persistent memory region to the implicit transaction */
+#define VALGRIND_PMC_ADD_TO_TX_NO_DRAIN(_qzz_addr,_qzz_len)                          \
     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,                 \
                             VG_USERREQ__PMC_ADD_TO_TX,                      \
                             (_qzz_addr), (_qzz_len), 0, 0, 0)
 
 /** Add a persistent memory region to an explicit transaction */
-#define VALGRIND_PMC_ADD_TO_TX_N(_qzz_txn,_qzz_addr,_qzz_len)               \
+#define VALGRIND_PMC_ADD_TO_TX_N_NO_DRAIN(_qzz_txn,_qzz_addr,_qzz_len)               \
     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,                 \
                             VG_USERREQ__PMC_ADD_TO_TX_N,                    \
                             (_qzz_txn), (_qzz_addr), (_qzz_len), 0, 0)
